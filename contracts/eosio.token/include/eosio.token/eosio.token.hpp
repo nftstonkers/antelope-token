@@ -101,6 +101,63 @@ namespace eosio {
          [[eosio::action]]
          void close( const name& owner, const symbol& symbol );
 
+         /**
+          * This action allows token issuer to freeze/unfreeze an account.
+          *
+          * @param account - the account to be frozen/unfrozen,
+          * @param symbol - the symbol of the token to execute freeze operation.
+          * @param status - true = freeze, false = unfreeze.
+
+          *
+          * @pre The pair of owner plus symbol has to exist otherwise no action is executed,
+          */
+          [[eosio::action]]
+         void freeze( const name& account, const symbol& symbol, const bool& status );
+
+         /**
+          * This action allows token issuer to set fee for token transfers.
+          *
+          * @param issuer - issuer for the token,
+          * @param symbol - the symbol of the token to set fee for.
+          * @param fee - can have value from 0 - 50. 50 is equal to 0.5%.
+
+          *
+          * @pre The pair of issuer plus symbol has to exist otherwise no action is executed,
+          */
+          [[eosio::action]]
+         void setfee( const name& issuer, const symbol& symbol, const uint8_t fees );
+
+         /**
+          * This is no-op action to keep track of fee for transfers.
+          *
+          * @param account - wallet who paid the fees
+          * @param fee - amount of fees paid for transfer
+          *
+          */
+         [[eosio::action]]
+         void logfee( const name& account, const asset& fees);
+
+
+         /**
+         * @brief      Switch the exemption status of an account for a given token.
+         *
+         * This action either adds or removes an account from the exemption list based 
+         * on its current status. If the account is currently exempted, it will be removed
+         * from the list, and vice-versa.
+         *
+         * @param      issuer -   The issuer of the token. This action requires the 
+         *                      authorization of the issuer.
+         * @param      symbol -   The symbol of the token for which the exemption status 
+         *                      should be changed. This ensures the exemption is tied 
+         *                      to a specific token.
+         * @param      account -  The account for which the exemption status is to be 
+         *                      toggled. It's added to or removed from the exemption 
+         *                      list based on its current status.
+         */
+          [[eosio::action]]
+         void switchexempt(const name& issuer, const symbol& symbol, const name& account);
+
+
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -115,32 +172,52 @@ namespace eosio {
             return ac.balance;
          }
 
+
+         // Actions open to public
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
          using open_action = eosio::action_wrapper<"open"_n, &token::open>;
          using close_action = eosio::action_wrapper<"close"_n, &token::close>;
+         using freeze_action = eosio::action_wrapper<"freeze"_n, &token::freeze>;
+         using setfee_action = eosio::action_wrapper<"setfee"_n, &token::setfee>;
+         using switchexempt_action = eosio::action_wrapper<"switchexempt"_n, &token::switchexempt>;
+         using logfee_action = eosio::action_wrapper<"logfee"_n, &token::logfee>;
+
       private:
          struct [[eosio::table]] account {
             asset    balance;
+            bool     is_frozen = false;
 
             uint64_t primary_key()const { return balance.symbol.code().raw(); }
          };
+         typedef eosio::multi_index< "accounts"_n, account > accounts;
+
 
          struct [[eosio::table]] currency_stats {
             asset    supply;
             asset    max_supply;
             name     issuer;
+            uint8_t  fees=10;
 
             uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
-         typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
+
+         // Define the structure for the table
+         struct [[eosio::table]] exemptedaccount {
+            name account;
+            auto primary_key() const { return account.value; }
+         };
+         typedef eosio::multi_index<"exemptedacc"_n, exemptedaccount> exemptions_table;
+
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
+         asset compute_fee(const asset& quantity, uint8_t fee);
+
    };
 
 }
